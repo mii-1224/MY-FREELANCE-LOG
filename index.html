@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>接案收入帳本</title>
 
     <!-- App 圖示設定 -->
@@ -25,7 +25,7 @@
             --border: #e5e5ea;       
             --status-unbilled: #aeaeb2; 
             --status-pending: #7986cb;  
-            --status-paid: #34c759; /* 改稍微鮮豔一點的綠 */     
+            --status-paid: #34c759;     
             --delete-color: #ff3b30; 
             --nav-height: 60px;
         }
@@ -36,7 +36,8 @@
             color: var(--text-main);
             margin: 0;
             padding: 20px;
-            padding-bottom: calc(var(--nav-height) + 30px); /* 避免內容被底部導航遮住 */
+            /* 修正：預留更多底部空間，防止內容被變高的導航列擋住 */
+            padding-bottom: calc(var(--nav-height) + 60px); 
             line-height: 1.6;
             -webkit-font-smoothing: antialiased;
         }
@@ -51,15 +52,22 @@
         h1, h2 { font-weight: 300; text-align: center; color: var(--accent); margin-bottom: 20px; }
         h1 { font-size: 1.4rem; letter-spacing: 2px; }
 
-        /* --- 底部導航列 --- */
+        /* --- 底部導航列 (已修正安全區域) --- */
         .bottom-nav {
-            position: fixed; bottom: 0; left: 0; width: 100%; height: var(--nav-height);
+            position: fixed; bottom: 0; left: 0; width: 100%; 
+            /* 修正：自動高度，適應不同手機的下巴 */
+            height: auto; 
             background: rgba(255, 255, 255, 0.95);
             backdrop-filter: blur(10px);
             border-top: 1px solid var(--border);
             display: flex; justify-content: space-around; align-items: center;
             z-index: 1000;
+            
+            /* 修正：上下內距 + 自動避開黑條 (env) */
+            padding-top: 12px;
+            padding-bottom: calc(12px + env(safe-area-inset-bottom));
         }
+        
         .nav-item {
             flex: 1; text-align: center; cursor: pointer;
             color: var(--text-light); font-size: 0.7rem;
@@ -75,8 +83,11 @@
         .controls { display: flex; gap: 10px; margin-bottom: 15px; }
         select { background: #fff; border: 1px solid var(--border); padding: 10px; border-radius: 8px; flex: 1; font-size: 0.9rem; }
         
+        /* 浮動按鈕位置也需要微調，避開變高的導航列 */
         .add-btn-float {
-            position: fixed; bottom: calc(var(--nav-height) + 20px); right: 20px;
+            position: fixed; 
+            bottom: calc(var(--nav-height) + 40px + env(safe-area-inset-bottom)); 
+            right: 20px;
             background: var(--text-main); color: white; width: 56px; height: 56px;
             border-radius: 50%; display: flex; justify-content: center; align-items: center;
             font-size: 2rem; box-shadow: 0 4px 15px rgba(0,0,0,0.2); cursor: pointer; z-index: 900;
@@ -256,7 +267,7 @@
         <ul class="settings-list">
             <li>
                 <span>目前版本</span>
-                <span style="color:#888;">v2.0 PRO</span>
+                <span style="color:#888;">v2.1</span>
             </li>
             <li onclick="openGoalSettings()" style="cursor:pointer;">
                 <span>修改月收入目標</span>
@@ -267,419 +278,3 @@
                 <span>></span>
             </li>
         </ul>
-
-        <button class="btn-logout" onclick="logout()">登出帳號</button>
-        <p style="text-align:center; margin-top:20px; color:#ccc; font-size:0.8rem;">
-            Created for Freelancers
-        </p>
-    </section>
-
-</div>
-
-<!-- 底部導航列 -->
-<nav class="bottom-nav">
-    <div class="nav-item active" onclick="switchPage('ledger', this)">
-        <svg viewBox="0 0 24 24"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/></svg>
-        <span>帳本</span>
-    </div>
-    <div class="nav-item" onclick="switchPage('stats', this)">
-        <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></svg>
-        <span>分析</span>
-    </div>
-    <div class="nav-item" onclick="switchPage('settings', this)">
-        <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
-        <span>設定</span>
-    </div>
-</nav>
-
-<script>
-    // ==========================================
-    // ⚠️ 請在此填入你的 GAS 網址
-    const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwsWP7prYO9nOLx3k25qy5OBXYXHyTeP02cOAWxdU1dlRBz_a-sEwnwUEDLws-6t0rimg/exec'; 
-    // ==========================================
-
-    let rawData = [];
-    let currentEditId = null; 
-    let USER_TOKEN = '';
-    let monthlyGoal = localStorage.getItem('freelance_goal') || 50000; // 預設目標
-
-    // 圖表實例
-    let chartBarInstance = null;
-    let chartPieInstance = null;
-
-    window.onload = function() {
-        // 1. 檢查密碼
-        const savedPass = localStorage.getItem('freelance_app_password');
-        if(savedPass) {
-            USER_TOKEN = savedPass;
-            document.getElementById('login-overlay').classList.add('hidden');
-            fetchData();
-        }
-        // 2. 初始化日期
-        setDefaultDate();
-        // 3. 初始化目標顯示
-        updateGoalUI();
-    };
-
-    // --- 頁面切換邏輯 ---
-    function switchPage(pageName, navEl) {
-        // 隱藏所有頁面
-        document.querySelectorAll('.page-section').forEach(el => el.classList.remove('active'));
-        // 顯示目標頁面
-        document.getElementById('page-' + pageName).classList.add('active');
-        
-        // 更新導航按鈕狀態
-        document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
-        if(navEl) navEl.classList.add('active');
-
-        // 如果切換到統計頁，重新繪製圖表
-        if(pageName === 'stats') {
-            renderCharts();
-        }
-    }
-
-    // --- 登入與資料讀取 ---
-    function checkLogin() {
-        const input = document.getElementById('password-input').value;
-        if(!input) return;
-        USER_TOKEN = input;
-        const msg = document.getElementById('login-msg');
-        msg.innerText = "驗證中...";
-        
-        fetch(GOOGLE_SCRIPT_URL + '?action=get&password=' + encodeURIComponent(USER_TOKEN))
-        .then(res => res.json())
-        .then(json => {
-            if(json.status === 'success') {
-                localStorage.setItem('freelance_app_password', USER_TOKEN);
-                document.getElementById('login-overlay').classList.add('hidden');
-                processData(json);
-            } else {
-                msg.innerText = "密碼錯誤";
-                USER_TOKEN = '';
-            }
-        })
-        .catch(err => msg.innerText = "連線失敗");
-    }
-
-    function fetchData() {
-        document.getElementById('loader').classList.remove('hidden');
-        fetch(GOOGLE_SCRIPT_URL + '?action=get&password=' + encodeURIComponent(USER_TOKEN))
-        .then(res => res.json())
-        .then(json => {
-            if(json.status === 'success') processData(json);
-            else if(json.message.includes('密碼')) logout(); 
-        })
-        .catch(err => console.error(err));
-    }
-
-    function processData(json) {
-        rawData = json.data;
-        updateClientDatalist(json.clients);
-        populateDateFilters();
-        applyFilter(); // 渲染列表
-        document.getElementById('loader').classList.add('hidden');
-    }
-
-    // --- 核心資料操作 (新增/編輯/刪除/狀態) ---
-    function submitData() {
-        const date = document.getElementById('in-date').value;
-        const client = document.getElementById('in-client').value;
-        const project = document.getElementById('in-project').value;
-        const amount = document.getElementById('in-amount').value;
-        const status = document.getElementById('in-status').value;
-
-        if(!date || !client || !amount) { alert("請填寫完整資訊"); return; }
-
-        const payload = { date, client, project, amount, status, password: USER_TOKEN };
-        const btn = document.getElementById('save-btn');
-        const orgText = btn.innerText;
-        btn.innerText = "處理中..."; btn.disabled = true;
-
-        let action = currentEditId ? 'edit' : 'add';
-        if(currentEditId) payload.id = currentEditId;
-
-        fetch(GOOGLE_SCRIPT_URL + '?action=' + action, { method: 'POST', body: JSON.stringify(payload) })
-        .then(res => res.json())
-        .then(res => {
-            if(res.status === 'success') {
-                closeForm();
-                fetchData();
-            } else alert(res.message);
-        })
-        .finally(() => { btn.innerText = orgText; btn.disabled = false; });
-    }
-
-    function updateStatus(rowIndex, newStatus) {
-        // 樂觀更新前端
-        const item = rawData.find(r => r.rowIndex === rowIndex);
-        if(item) item.status = newStatus;
-        applyFilter(); 
-        // 背景更新後端
-        fetch(GOOGLE_SCRIPT_URL + '?action=updateStatus', {
-            method: 'POST', body: JSON.stringify({ rowIndex, newStatus, password: USER_TOKEN })
-        });
-    }
-
-    function deleteRecord(id) {
-        if(!confirm("確定刪除？")) return;
-        fetch(GOOGLE_SCRIPT_URL + '?action=delete', {
-            method: 'POST', body: JSON.stringify({ id, password: USER_TOKEN })
-        }).then(res => res.json()).then(res => {
-            if(res.status === 'success') fetchData();
-        });
-    }
-
-    // --- 介面渲染 (列表) ---
-    function applyFilter() {
-        const year = document.getElementById('filter-year').value;
-        const month = document.getElementById('filter-month').value;
-        const client = document.getElementById('filter-client').value;
-        
-        const filtered = rawData.filter(item => {
-            const d = new Date(item.date);
-            return (year === 'all' || d.getFullYear().toString() === year) &&
-                   (month === 'all' || (d.getMonth() + 1).toString() === month) &&
-                   (client === 'all' || item.client === client);
-        });
-        
-        renderList(filtered);
-    }
-
-    function renderList(data) {
-        const list = document.getElementById('record-list');
-        list.innerHTML = '';
-        if(data.length === 0) {
-            list.innerHTML = '<li style="text-align:center;color:#ccc;margin-top:20px;">無資料</li>';
-            return;
-        }
-
-        data.forEach(item => {
-            const amt = parseInt(item.amount) || 0;
-            let dateStr = item.date.substring(0, 10);
-            const li = document.createElement('li');
-            const statusClass = item.status.split('(')[0];
-            
-            li.className = `record-card status-${statusClass}`;
-            li.innerHTML = `
-                <div class="card-row" onclick="openEditMode('${item.id}')">
-                    <div>
-                        <div class="card-client">${item.client}</div>
-                        <div class="card-project">${item.project}</div>
-                        <span class="card-date">${dateStr}</span>
-                        <span class="status-badge">${item.status}</span>
-                    </div>
-                    <div style="text-align:right;">
-                        <div class="card-amt">$${amt.toLocaleString()}</div>
-                        <div style="margin-top:10px;">
-                            <button class="btn-mini" onclick="event.stopPropagation(); deleteRecord('${item.id}')">刪除</button>
-                        </div>
-                    </div>
-                </div>
-                <!-- 隱藏的狀態切換器 (點擊卡片編輯時才用) -->
-                <div style="margin-top:10px; border-top:1px solid #eee; padding-top:10px; display:flex; align-items:center;">
-                   <span style="font-size:0.75rem; color:#888; margin-right:5px;">快速切換:</span>
-                   <select style="padding:5px; font-size:0.8rem;" onchange="updateStatus(${item.rowIndex}, this.value)">
-                        <option value="未請款" ${item.status === '未請款' ? 'selected' : ''}>未請款</option>
-                        <option value="已請款" ${item.status === '已請款' ? 'selected' : ''}>已請款</option>
-                        <option value="已入帳" ${item.status === '已入帳' ? 'selected' : ''}>已入帳</option>
-                   </select>
-                </div>
-            `;
-            list.appendChild(li);
-        });
-    }
-
-    // --- 統計圖表與目標 (Charts & Goals) ---
-    function renderCharts() {
-        if(rawData.length === 0) return;
-
-        // 1. 計算數據
-        let totalEst = 0, totalReal = 0;
-        let monthlyData = {}; // { '2023-01': 3000 }
-        let clientData = {};  // { 'Google': 50000 }
-        const currentYear = new Date().getFullYear();
-
-        // 本月收入 (用於目標進度)
-        let currentMonthIncome = 0;
-        const now = new Date();
-        const thisMonthKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
-
-        rawData.forEach(item => {
-            const d = new Date(item.date);
-            const amt = parseInt(item.amount) || 0;
-            const y = d.getFullYear();
-            const m = d.getMonth() + 1;
-            const key = `${y}-${String(m).padStart(2,'0')}`;
-
-            // 全體統計
-            totalEst += amt;
-            if(item.status === '已入帳') totalReal += amt;
-
-            // 只統計「今年」的圖表
-            if(y === currentYear) {
-                if(!monthlyData[m]) monthlyData[m] = 0;
-                monthlyData[m] += amt;
-            }
-
-            // 客戶統計 (不分年份，或可改為今年)
-            if(!clientData[item.client]) clientData[item.client] = 0;
-            clientData[item.client] += amt;
-
-            // 本月實際收入 (目標進度用，只算已入帳？通常目標是看營收，這裡算全部)
-            // 你可以決定要算「已入帳」還是「帳面總額」。這裡先算「帳面總額」比較有成就感
-            if(key === thisMonthKey) {
-                currentMonthIncome += amt;
-            }
-        });
-
-        // 更新文字統計
-        document.getElementById('stat-total-est').innerText = '$' + totalEst.toLocaleString();
-        document.getElementById('stat-total-real').innerText = '$' + totalReal.toLocaleString();
-
-        // 更新目標進度條
-        updateGoalProgress(currentMonthIncome);
-
-        // --- 畫長條圖 (每月) ---
-        const ctxBar = document.getElementById('chart-bar').getContext('2d');
-        if(chartBarInstance) chartBarInstance.destroy(); // 清除舊圖
-        
-        const labelsBar = [];
-        const dataBar = [];
-        for(let i=1; i<=12; i++) {
-            labelsBar.push(i + '月');
-            dataBar.push(monthlyData[i] || 0);
-        }
-
-        chartBarInstance = new Chart(ctxBar, {
-            type: 'bar',
-            data: {
-                labels: labelsBar,
-                datasets: [{
-                    label: '月收入',
-                    data: dataBar,
-                    backgroundColor: '#7986cb',
-                    borderRadius: 4
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: { legend: { display: false } },
-                scales: { y: { beginAtZero: true } }
-            }
-        });
-
-        // --- 畫圓餅圖 (客戶) ---
-        const ctxPie = document.getElementById('chart-pie').getContext('2d');
-        if(chartPieInstance) chartPieInstance.destroy();
-
-        // 排序並只取前 5 名
-        const sortedClients = Object.entries(clientData).sort((a,b) => b[1] - a[1]).slice(0, 5);
-        
-        chartPieInstance = new Chart(ctxPie, {
-            type: 'doughnut',
-            data: {
-                labels: sortedClients.map(x => x[0]),
-                datasets: [{
-                    data: sortedClients.map(x => x[1]),
-                    backgroundColor: ['#34c759', '#5ac8fa', '#ffcc00', '#ff3b30', '#8e8e93']
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false
-            }
-        });
-    }
-
-    // --- 目標設定功能 ---
-    function openGoalSettings() {
-        document.getElementById('goal-input').value = monthlyGoal;
-        document.getElementById('goal-overlay').classList.remove('hidden');
-    }
-
-    function saveGoal() {
-        const val = document.getElementById('goal-input').value;
-        if(val) {
-            monthlyGoal = parseInt(val);
-            localStorage.setItem('freelance_goal', monthlyGoal);
-            updateGoalUI();
-            renderCharts(); // 重新計算進度
-            document.getElementById('goal-overlay').classList.add('hidden');
-        }
-    }
-
-    function updateGoalUI() {
-        document.getElementById('goal-target').innerText = '/ $' + parseInt(monthlyGoal).toLocaleString();
-    }
-
-    function updateGoalProgress(currentIncome) {
-        const percent = Math.min(100, Math.round((currentIncome / monthlyGoal) * 100));
-        document.getElementById('current-month-income').innerText = '$' + currentIncome.toLocaleString();
-        document.getElementById('goal-bar').style.width = percent + '%';
-        document.getElementById('goal-percent').innerText = percent + '%';
-        
-        // 顏色變化：達成目標變綠色，否則灰色
-        const bar = document.getElementById('goal-bar');
-        if(percent >= 100) bar.style.backgroundColor = '#34c759'; // Green
-        else bar.style.backgroundColor = '#7986cb'; // Blue/Purple
-    }
-
-    // --- 表單與工具函數 ---
-    function openAddMode() {
-        currentEditId = null;
-        document.getElementById('form-title').innerText = "新增記錄";
-        document.getElementById('in-client').value = '';
-        document.getElementById('in-project').value = '';
-        document.getElementById('in-amount').value = '';
-        document.getElementById('in-status').value = '未請款';
-        document.getElementById('form-overlay').classList.remove('hidden');
-    }
-    function openEditMode(id) {
-        currentEditId = id;
-        const item = rawData.find(r => r.id.toString() === id.toString());
-        if(!item) return;
-        document.getElementById('form-title').innerText = "編輯記錄";
-        document.getElementById('in-date').value = item.date.substring(0, 10);
-        document.getElementById('in-client').value = item.client;
-        document.getElementById('in-project').value = item.project;
-        document.getElementById('in-amount').value = item.amount;
-        document.getElementById('in-status').value = item.status;
-        document.getElementById('form-overlay').classList.remove('hidden');
-    }
-    function closeForm() { document.getElementById('form-overlay').classList.add('hidden'); }
-    function setDefaultDate() { 
-        const offset = new Date().getTimezoneOffset() * 60000;
-        document.getElementById('in-date').value = (new Date(Date.now() - offset)).toISOString().slice(0, 10);
-    }
-    function logout() {
-        if(confirm("確定要登出嗎？")) {
-            localStorage.removeItem('freelance_app_password');
-            location.reload();
-        }
-    }
-    function updateClientDatalist(clients) {
-        const dl = document.getElementById('client-list'); 
-        const select = document.getElementById('filter-client');
-        dl.innerHTML = ''; 
-        while (select.options.length > 1) select.remove(1);
-        clients.forEach(c => {
-            if(!c) return;
-            const op1 = document.createElement('option'); op1.value = c; dl.appendChild(op1);
-            const op2 = document.createElement('option'); op2.value = c; op2.text = c; select.add(op2);
-        });
-    }
-    function populateDateFilters() {
-        const yearSelect = document.getElementById('filter-year'); 
-        const monthSelect = document.getElementById('filter-month');
-        if(yearSelect.options.length === 1) { 
-            const y = new Date().getFullYear();
-            for(let i=y; i>=y-5; i--) { const op=document.createElement('option'); op.value=i; op.innerText=i+'年'; yearSelect.appendChild(op); }
-        }
-        if(monthSelect.options.length === 1) {
-            for(let i=1; i<=12; i++) { const op=document.createElement('option'); op.value=i; op.innerText=i+'月'; monthSelect.appendChild(op); }
-        }
-    }
-
-</script>
-</body>
-</html>
