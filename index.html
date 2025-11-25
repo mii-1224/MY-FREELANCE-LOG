@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>接案收入帳本</title>
+    <style>
+        :root {
+            /* 日式極簡配色 */
+            --bg-color: #f4f4f6;     
+            --card-bg: #ffffff;      
+            --text-main: #333333;    
+            --text-light: #8e8e93;   
+            --accent: #636366;       
+            --border: #e5e5ea;       
+            
+            --status-unbilled: #aeaeb2; 
+            --status-pending: #7986cb;  
+            --status-paid: #5ac8fa;     
+            --paid-text: #007aff; 
+            --delete-color: #ff3b30; 
+            --edit-color: #8e8e93; /* 編輯按鈕顏色 */
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 20px;
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding-bottom: 50px;
+        }
+
+        h1 {
+            font-weight: 200;
+            font-size: 1.4rem;
+            text-align: center;
+            margin-bottom: 25px;
+            color: var(--accent);
+            letter-spacing: 2px;
+        }
+
+        /* 統計卡片 */
+        .summary-card {
+            background: var(--card-bg);
+            padding: 25px 15px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.03);
+            margin-bottom: 25px;
+            display: flex;
+            justify-content: space-around;
+            text-align: center;
+            border: 1px solid #fff;
+        }
+        .summary-item h3 { margin: 0; font-size: 0.8rem; color: var(--text-light); font-weight: normal; margin-bottom: 8px; }
+        .summary-item p { margin: 0; font-size: 1.3rem; font-weight: 600; letter-spacing: 0.5px; }
+
+        /* 控制區 & 表單 */
+        .controls, .input-form {
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.02);
+        }
+
+        .btn {
+            background-color: var(--text-main);
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            width: 100%;
+            font-size: 1rem;
+            transition: all 0.2s;
+            font-weight: 500;
+            letter-spacing: 1px;
+        }
+        .btn:active { transform: scale(0.98); }
+        .btn-outline {
+            background: transparent;
+            border: 1px solid var(--text-main);
+            color: var(--text-main);
+            margin-top: 10px;
+        }
+        /* 更新模式下的按鈕顏色 */
+        .btn.is-editing {
+            background-color: var(--status-pending);
+        }
+
+        input, select {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            box-sizing: border-box;
+            font-size: 16px; 
+            background: #fafafa;
+            color: var(--text-main);
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        input:focus, select:focus { border-color: var(--accent); background: #fff; }
+
+        .filter-row { display: flex; gap: 10px; }
+
+        /* 資料列表 */
+        .record-list { list-style: none; padding: 0; }
+
+        .record-card {
+            background: var(--card-bg);
+            padding: 18px;
+            margin-bottom: 15px;
+            border-radius: 10px;
+            border-left: 5px solid var(--status-unbilled);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+            position: relative;
+        }
+
+        .record-card.status-未請款 { border-left-color: var(--status-unbilled); }
+        .record-card.status-已請款 { border-left-color: var(--status-pending); }
+        .record-card.status-已入帳 { border-left-color: var(--status-paid); }
+
+        .card-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+        .card-date { font-size: 0.8rem; color: var(--text-light); letter-spacing: 0.5px; }
+        .card-amt { font-size: 1.25rem; font-weight: 600; color: var(--text-main); }
+        
+        .card-client { font-size: 0.95rem; font-weight: 600; color: var(--accent); margin-bottom: 2px; }
+        .card-project { font-size: 0.9rem; color: var(--text-main); margin-bottom: 12px;}
+        
+        .card-actions {
+            padding-top: 12px;
+            border-top: 1px solid #f0f0f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .status-select {
+            width: auto;
+            margin: 0;
+            padding: 6px 12px;
+            font-size: 0.85rem;
+            background-color: #f9f9f9;
+            border-color: #eee;
+            border-radius: 20px;
+            cursor: pointer;
+        }
+
+        /* 動作按鈕群組 */
+        .action-group {
+            display: flex;
+            gap: 10px;
+        }
+        .btn-mini {
+            background: none;
+            border: none;
+            font-size: 0.85rem;
+            cursor: pointer;
+            padding: 5px 8px;
+            border-radius: 4px;
+        }
+        .btn-edit { color: var(--edit-color); }
+        .btn-edit:hover { background-color: #f0f0f0; }
+        .btn-delete { color: var(--delete-color); }
+        .btn-delete:hover { background-color: #fff0f0; }
+
+        /* 讀取中動畫 */
+        #loader { text-align: center; padding: 30px; color: var(--text-light); font-size: 0.9rem;}
+        .hidden { display: none !important; }
+
+        @media (max-width: 480px) {
+            body { padding: 15px; }
+            .summary-card { padding: 20px 10px; }
+        }
+
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>MY FREELANCE LOG</h1>
+
+    <!-- 統計區 -->
+    <div class="summary-card">
+        <div class="summary-item">
+            <h3>預估總額 (含未收)</h3>
+            <p id="total-est">NT$ 0</p>
+        </div>
+        <div class="summary-item">
+            <h3>實際入帳</h3>
+            <p id="total-real" style="color: var(--paid-text);">NT$ 0</p>
+        </div>
+    </div>
+
+    <!-- 篩選區 -->
+    <div class="controls">
+        <div class="filter-row">
+            <select id="filter-year"><option value="all">所有年份</option></select>
+            <select id="filter-month"><option value="all">所有月份</option></select>
+        </div>
+        <select id="filter-client">
+            <option value="all">所有客戶</option>
+        </select>
+    </div>
+
+    <!-- 新增按鈕 -->
+    <button class="btn" onclick="openAddMode()" id="add-btn">+ 記一筆收入</button>
+
+    <!-- 輸入表單 (預設隱藏) -->
+    <div id="form-container" class="input-form hidden" style="margin-top: 15px;">
+        <h3 id="form-title" style="margin: 0 0 15px 0; font-size: 1rem; color: var(--text-light); text-align: center;">新增記錄</h3>
+        
+        <label style="font-size: 0.8rem; color: var(--text-light);">日期</label>
+        <input type="date" id="in-date" required>
+        
+        <input list="client-list" id="in-client" placeholder="客戶名稱 (選擇或輸入新客戶)">
+        <datalist id="client-list"></datalist>
+
+        <input type="text" id="in-project" placeholder="專案名稱">
+        <input type="number" id="in-amount" placeholder="金額 (NT$)" inputmode="numeric">
+        
+        <label style="font-size: 0.8rem; color: var(--text-light);">收款狀態</label>
+        <select id="in-status">
+            <option value="未請款">未請款</option>
+            <option value="已請款">已請款 (等待中)</option>
+            <option value="已入帳">已入帳</option>
+        </select>
+        
+        <div style="display: flex; gap: 10px; margin-top: 10px;">
+            <button class="btn" id="submit-btn" onclick="submitData()">儲存</button>
+            <button class="btn btn-outline" onclick="closeForm()" style="margin-top:0;">取消</button>
+        </div>
+    </div>
+
+    <!-- 列表區 -->
+    <div id="loader">正在同步雲端資料庫...</div>
+    <ul id="record-list" class="record-list"></ul>
+
+</div>
+
+<script>
+    // ==========================================
+    // ⚠️⚠️⚠️ 請務必將你的網址貼回這裡 ⚠️⚠️⚠️
+    const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwsWP7prYO9nOLx3k25qy5OBXYXHyTeP02cOAWxdU1dlRBz_a-sEwnwUEDLws-6t0rimg/exec'; 
+    // ==========================================
+
+    let rawData = [];
+    let currentEditId = null; // 用來記錄現在是否正在編輯某一筆資料
+    
+    window.onload = function() {
+        setDefaultDate();
+        fetchData();
+    };
+
+    function setDefaultDate() {
+        const today = new Date();
+        const offset = today.getTimezoneOffset() * 60000;
+        const localISOTime = (new Date(today - offset)).toISOString().slice(0, 10);
+        document.getElementById('in-date').value = localISOTime;
+    }
+
+    // 開啟「新增模式」
+    function openAddMode() {
+        currentEditId = null; // 清除編輯ID
+        document.getElementById('form-title').innerText = "新增記錄";
+        
+        const subBtn = document.getElementById('submit-btn');
+        subBtn.innerText = "儲存";
+        subBtn.classList.remove('is-editing');
+
+        // 清空欄位
+        document.getElementById('in-client').value = '';
+        document.getElementById('in-project').value = '';
+        document.getElementById('in-amount').value = '';
+        document.getElementById('in-status').value = '未請款';
+        setDefaultDate();
+
+        // 顯示表單
+        document.getElementById('form-container').classList.remove('hidden');
+        document.getElementById('add-btn').classList.add('hidden');
+    }
+
+    // 開啟「編輯模式」
+    function openEditMode(id) {
+        // 找到該筆資料
+        const item = rawData.find(r => r.id.toString() === id.toString());
+        if(!item) return;
+
+        currentEditId = id; // 設定現在正在編輯誰
+        document.getElementById('form-title').innerText = "編輯記錄";
+
+        const subBtn = document.getElementById('submit-btn');
+        subBtn.innerText = "更新資料";
+        subBtn.classList.add('is-editing');
+
+        // 填入舊資料
+        if(item.date && item.date.length >= 10) {
+            document.getElementById('in-date').value = item.date.substring(0, 10);
+        }
+        document.getElementById('in-client').value = item.client;
+        document.getElementById('in-project').value = item.project;
+        document.getElementById('in-amount').value = item.amount;
+        document.getElementById('in-status').value = item.status;
+
+        // 顯示表單並捲動到最上方
+        document.getElementById('form-container').classList.remove('hidden');
+        document.getElementById('add-btn').classList.add('hidden');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // 關閉表單
+    function closeForm() {
+        document.getElementById('form-container').classList.add('hidden');
+        document.getElementById('add-btn').classList.remove('hidden');
+        currentEditId = null;
+    }
+
+    // 1. 取得資料
+    function fetchData() {
+        document.getElementById('loader').classList.remove('hidden');
+        document.getElementById('record-list').innerHTML = '';
+        
+        fetch(GOOGLE_SCRIPT_URL + '?action=get')
+        .then(res => res.json())
+        .then(json => {
+            if(json.status === 'error') {
+                alert('系統錯誤：' + json.message);
+                return;
+            }
+            rawData = json.data;
+            updateClientDatalist(json.clients);
+            populateDateFilters();
+            applyFilter();
+            document.getElementById('loader').classList.add('hidden');
+        })
+        .catch(err => {
+            document.getElementById('loader').innerText = "讀取失敗，請檢查網路連線";
+            console.error(err);
+        });
+    }
+
+    // 2. 渲染列表
+    function renderList(data) {
+        const list = document.getElementById('record-list');
+        list.innerHTML = '';
+        
+        let totalEst = 0;
+        let totalReal = 0;
+
+        if (data.length === 0) {
+            list.innerHTML = '<li style="text-align:center; color:#999; padding:20px;">尚無資料</li>';
+        }
+
+        data.forEach(item => {
+            const amt = parseInt(item.amount) || 0;
+            totalEst += amt;
+            if(item.status === '已入帳') totalReal += amt;
+
+            let dateStr = item.date;
+            if(dateStr && dateStr.length >= 10) dateStr = dateStr.substring(0, 10);
+
+            const li = document.createElement('li');
+            const statusClass = item.status.split('(')[0]; 
+            li.className = `record-card status-${statusClass}`;
+            li.id = `card-${item.id}`; 
+            
+            li.innerHTML = `
+                <div class="card-header">
+                    <span class="card-date">${dateStr}</span>
+                    <span class="card-amt">$${amt.toLocaleString()}</span>
+                </div>
+                <div class="card-client">${item.client}</div>
+                <div class="card-project">${item.project}</div>
+                <div class="card-actions">
+                    <!-- 左側：狀態 -->
+                    <div style="display:flex; align-items:center;">
+                        <span class="status-label">狀態:</span>
+                        <select class="status-select" onchange="updateStatus(${item.rowIndex}, this.value)">
+                            <option value="未請款" ${item.status === '未請款' ? 'selected' : ''}>未請款</option>
+                            <option value="已請款" ${item.status === '已請款' ? 'selected' : ''}>已請款</option>
+                            <option value="已入帳" ${item.status === '已入帳' ? 'selected' : ''}>已入帳</option>
+                        </select>
+                    </div>
+                    <!-- 右側：編輯與刪除 -->
+                    <div class="action-group">
+                        <button class="btn-mini btn-edit" onclick="openEditMode('${item.id}')">編輯</button>
+                        <button class="btn-mini btn-delete" onclick="deleteRecord('${item.id}')">刪除</button>
+                    </div>
+                </div>
+            `;
+            list.appendChild(li);
+        });
+
+        document.getElementById('total-est').innerText = 'NT$ ' + totalEst.toLocaleString();
+        document.getElementById('total-real').innerText = 'NT$ ' + totalReal.toLocaleString();
+    }
+
+    // 3. 提交資料 (判斷是新增還是更新)
+    function submitData() {
+        const date = document.getElementById('in-date').value;
+        const client = document.getElementById('in-client').value;
+        const project = document.getElementById('in-project').value;
+        const amount = document.getElementById('in-amount').value;
+        const status = document.getElementById('in-status').value;
+
+        if(!date || !client || !amount) {
+            alert("請填寫日期、客戶名稱與金額");
+            return;
+        }
+
+        const payload = { date, client, project, amount, status };
+        const saveBtn = document.getElementById('submit-btn');
+        const originalText = saveBtn.innerText;
+        
+        saveBtn.innerText = "處理中...";
+        saveBtn.disabled = true;
+
+        // 判斷動作類型
+        let action = 'add';
+        if (currentEditId) {
+            action = 'edit';
+            payload.id = currentEditId; // 編輯時需要傳送 ID
+        }
+
+        fetch(GOOGLE_SCRIPT_URL + '?action=' + action, {
+            method: 'POST',
+            body: JSON.stringify(payload)
+        })
+        .then(res => res.json())
+        .then(response => {
+            if(response.status === 'success') {
+                closeForm(); // 關閉並重置表單
+                fetchData(); // 重新讀取
+            } else {
+                alert("儲存失敗：" + response.message);
+            }
+        })
+        .catch(err => { console.error(err); alert("連線錯誤"); })
+        .finally(() => {
+            saveBtn.innerText = originalText;
+            saveBtn.disabled = false;
+        });
+    }
+
+    // 4. 更新狀態
+    function updateStatus(rowIndex, newStatus) {
+        const target = rawData.find(r => r.rowIndex === rowIndex);
+        if(target) target.status = newStatus;
+        applyFilter(); 
+        fetch(GOOGLE_SCRIPT_URL + '?action=updateStatus', {
+            method: 'POST',
+            body: JSON.stringify({ rowIndex, newStatus })
+        });
+    }
+
+    // 5. 刪除資料
+    function deleteRecord(id) {
+        if(!confirm("確定要刪除這筆資料嗎？\n此動作無法復原。")) {
+            return;
+        }
+        const btn = document.querySelector(`#card-${id} .btn-delete`);
+        if(btn) btn.innerText = "...";
+
+        fetch(GOOGLE_SCRIPT_URL + '?action=delete', {
+            method: 'POST',
+            body: JSON.stringify({ id: id })
+        })
+        .then(res => res.json())
+        .then(response => {
+            if(response.status === 'success') {
+                fetchData();
+            } else {
+                alert("刪除失敗");
+            }
+        });
+    }
+
+    // 6. 篩選與清單處理
+    document.getElementById('filter-year').addEventListener('change', applyFilter);
+    document.getElementById('filter-month').addEventListener('change', applyFilter);
+    document.getElementById('filter-client').addEventListener('change', applyFilter);
+
+    function applyFilter() {
+        const year = document.getElementById('filter-year').value;
+        const month = document.getElementById('filter-month').value;
+        const client = document.getElementById('filter-client').value;
+
+        const filtered = rawData.filter(item => {
+            const d = new Date(item.date);
+            const itemYear = d.getFullYear().toString();
+            const itemMonth = (d.getMonth() + 1).toString();
+
+            const matchYear = year === 'all' || itemYear === year;
+            const matchMonth = month === 'all' || itemMonth === month;
+            const matchClient = client === 'all' || item.client === client;
+
+            return matchYear && matchMonth && matchClient;
+        });
+        renderList(filtered);
+    }
+
+    function updateClientDatalist(clients) {
+        const dl = document.getElementById('client-list');
+        const select = document.getElementById('filter-client');
+        const currentSelectValue = select.value;
+        dl.innerHTML = '';
+        while (select.options.length > 1) { select.remove(1); }
+
+        clients.forEach(c => {
+            if(!c) return;
+            const op1 = document.createElement('option'); op1.value = c; dl.appendChild(op1);
+            const op2 = document.createElement('option'); op2.value = c; op2.text = c; select.add(op2);
+        });
+        select.value = currentSelectValue;
+        if (select.selectedIndex === -1) select.value = 'all';
+    }
+
+    function populateDateFilters() {
+        const yearSelect = document.getElementById('filter-year');
+        const monthSelect = document.getElementById('filter-month');
+        const currentYear = new Date().getFullYear();
+        if(yearSelect.options.length === 1) {
+            for(let y = currentYear; y >= currentYear - 5; y--) {
+                let op = document.createElement('option'); op.value = y; op.innerText = y + '年'; yearSelect.appendChild(op);
+            }
+        }
+        if(monthSelect.options.length === 1) {
+            for(let m = 1; m <= 12; m++) {
+                let op = document.createElement('option'); op.value = m; op.innerText = m + '月'; monthSelect.appendChild(op);
+            }
+        }
+    }
+</script>
+
+</body>
+</html>
