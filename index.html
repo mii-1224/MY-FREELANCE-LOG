@@ -5,12 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>接案收入帳本</title>
 
-    <!-- App 圖示與全螢幕設定 -->
+    <!-- App 圖示設定 -->
     <link rel="icon" type="image/png" href="icon.png">
     <link rel="apple-touch-icon" href="icon.png">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="theme-color" content="#f4f4f6">
+
+    <!-- 引入圖表庫 Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <style>
         :root {
@@ -22,10 +25,9 @@
             --border: #e5e5ea;       
             --status-unbilled: #aeaeb2; 
             --status-pending: #7986cb;  
-            --status-paid: #5ac8fa;     
-            --paid-text: #007aff; 
+            --status-paid: #34c759; /* 改稍微鮮豔一點的綠 */     
             --delete-color: #ff3b30; 
-            --edit-color: #8e8e93;
+            --nav-height: 60px;
         }
 
         body {
@@ -34,145 +36,312 @@
             color: var(--text-main);
             margin: 0;
             padding: 20px;
+            padding-bottom: calc(var(--nav-height) + 30px); /* 避免內容被底部導航遮住 */
             line-height: 1.6;
             -webkit-font-smoothing: antialiased;
         }
 
-        .container { max-width: 600px; margin: 0 auto; padding-bottom: 50px; }
-        h1 { font-weight: 200; font-size: 1.4rem; text-align: center; margin-bottom: 25px; color: var(--accent); letter-spacing: 2px; }
+        .container { max-width: 600px; margin: 0 auto; }
+        
+        /* 隱藏頁面機制 */
+        .page-section { display: none; animation: fadeIn 0.3s; }
+        .page-section.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 
-        .summary-card { background: var(--card-bg); padding: 25px 15px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.03); margin-bottom: 25px; display: flex; justify-content: space-around; text-align: center; border: 1px solid #fff; }
-        .summary-item h3 { margin: 0; font-size: 0.8rem; color: var(--text-light); font-weight: normal; margin-bottom: 8px; }
-        .summary-item p { margin: 0; font-size: 1.3rem; font-weight: 600; letter-spacing: 0.5px; }
+        h1, h2 { font-weight: 300; text-align: center; color: var(--accent); margin-bottom: 20px; }
+        h1 { font-size: 1.4rem; letter-spacing: 2px; }
 
-        .controls, .input-form { background: var(--card-bg); padding: 20px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.02); }
+        /* --- 底部導航列 --- */
+        .bottom-nav {
+            position: fixed; bottom: 0; left: 0; width: 100%; height: var(--nav-height);
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-top: 1px solid var(--border);
+            display: flex; justify-content: space-around; align-items: center;
+            z-index: 1000;
+        }
+        .nav-item {
+            flex: 1; text-align: center; cursor: pointer;
+            color: var(--text-light); font-size: 0.7rem;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+        }
+        .nav-item svg { width: 24px; height: 24px; margin-bottom: 2px; fill: currentColor; }
+        .nav-item.active { color: var(--text-main); font-weight: 600; }
 
-        .btn { background-color: var(--text-main); color: white; border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; width: 100%; font-size: 1rem; transition: all 0.2s; font-weight: 500; letter-spacing: 1px; }
-        .btn:active { transform: scale(0.98); }
-        .btn-outline { background: transparent; border: 1px solid var(--text-main); color: var(--text-main); margin-top: 10px; }
-        .btn.is-editing { background-color: var(--status-pending); }
+        /* --- 共用卡片樣式 --- */
+        .card { background: var(--card-bg); padding: 20px; border-radius: 12px; margin-bottom: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); }
 
-        input, select { width: 100%; padding: 12px; margin-bottom: 12px; border: 1px solid var(--border); border-radius: 8px; box-sizing: border-box; font-size: 16px; background: #fafafa; color: var(--text-main); outline: none; transition: border-color 0.2s; }
-        input:focus, select:focus { border-color: var(--accent); background: #fff; }
+        /* --- 記帳頁 (Ledger) --- */
+        .controls { display: flex; gap: 10px; margin-bottom: 15px; }
+        select { background: #fff; border: 1px solid var(--border); padding: 10px; border-radius: 8px; flex: 1; font-size: 0.9rem; }
+        
+        .add-btn-float {
+            position: fixed; bottom: calc(var(--nav-height) + 20px); right: 20px;
+            background: var(--text-main); color: white; width: 56px; height: 56px;
+            border-radius: 50%; display: flex; justify-content: center; align-items: center;
+            font-size: 2rem; box-shadow: 0 4px 15px rgba(0,0,0,0.2); cursor: pointer; z-index: 900;
+            border: none;
+        }
+        .add-btn-float:active { transform: scale(0.95); }
 
-        .filter-row { display: flex; gap: 10px; }
+        /* 列表樣式 */
         .record-list { list-style: none; padding: 0; }
-        .record-card { background: var(--card-bg); padding: 18px; margin-bottom: 15px; border-radius: 10px; border-left: 5px solid var(--status-unbilled); box-shadow: 0 2px 8px rgba(0,0,0,0.02); position: relative; }
+        .record-card {
+            background: var(--card-bg); padding: 16px; margin-bottom: 12px;
+            border-radius: 10px; border-left: 5px solid var(--status-unbilled);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
         .record-card.status-未請款 { border-left-color: var(--status-unbilled); }
         .record-card.status-已請款 { border-left-color: var(--status-pending); }
         .record-card.status-已入帳 { border-left-color: var(--status-paid); }
-        .card-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
-        .card-date { font-size: 0.8rem; color: var(--text-light); letter-spacing: 0.5px; }
-        .card-amt { font-size: 1.25rem; font-weight: 600; color: var(--text-main); }
-        .card-client { font-size: 0.95rem; font-weight: 600; color: var(--accent); margin-bottom: 2px; }
-        .card-project { font-size: 0.9rem; color: var(--text-main); margin-bottom: 12px;}
-        .card-actions { padding-top: 12px; border-top: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: center; }
-        .status-select { width: auto; margin: 0; padding: 6px 12px; font-size: 0.85rem; background-color: #f9f9f9; border-color: #eee; border-radius: 20px; cursor: pointer; }
-        .action-group { display: flex; gap: 10px; }
-        .btn-mini { background: none; border: none; font-size: 0.85rem; cursor: pointer; padding: 5px 8px; border-radius: 4px; }
-        .btn-edit { color: var(--edit-color); }
-        .btn-edit:hover { background-color: #f0f0f0; }
-        .btn-delete { color: var(--delete-color); }
-        .btn-delete:hover { background-color: #fff0f0; }
-        #loader { text-align: center; padding: 30px; color: var(--text-light); font-size: 0.9rem;}
+        
+        .card-row { display: flex; justify-content: space-between; align-items: baseline; }
+        .card-date { font-size: 0.8rem; color: var(--text-light); }
+        .card-amt { font-size: 1.1rem; font-weight: bold; }
+        .card-client { font-size: 0.95rem; font-weight: 600; color: #555; }
+        .card-project { font-size: 0.85rem; color: #777; margin-bottom: 8px; }
+        .btn-mini { border: 1px solid var(--border); background: none; padding: 4px 8px; font-size: 0.75rem; border-radius: 4px; color: var(--text-light); cursor: pointer; }
+        .status-badge { font-size: 0.75rem; padding: 2px 8px; border-radius: 10px; background: #eee; color: #666; }
+
+        /* --- 統計頁 (Stats) --- */
+        .goal-section { text-align: center; margin-bottom: 20px; }
+        .progress-container { background: #eee; height: 10px; border-radius: 5px; margin: 10px 0; overflow: hidden; }
+        .progress-bar { height: 100%; background: var(--status-paid); width: 0%; transition: width 0.5s; }
+        .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+        .stat-box { background: var(--card-bg); padding: 15px; border-radius: 10px; text-align: center; box-shadow: 0 2px 5px rgba(0,0,0,0.02); }
+        .stat-box h4 { margin: 0; font-size: 0.8rem; color: var(--text-light); font-weight: normal; }
+        .stat-box p { margin: 5px 0 0; font-size: 1.1rem; font-weight: bold; }
+
+        /* --- 設定頁 (Settings) --- */
+        .settings-list { list-style: none; padding: 0; }
+        .settings-list li {
+            background: var(--card-bg); padding: 15px; border-bottom: 1px solid var(--border);
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .settings-list li:first-child { border-top-left-radius: 10px; border-top-right-radius: 10px; }
+        .settings-list li:last-child { border-bottom-left-radius: 10px; border-bottom-right-radius: 10px; border-bottom: none; }
+        .btn-logout { width: 100%; padding: 15px; background: #fff; border: 1px solid var(--delete-color); color: var(--delete-color); border-radius: 10px; margin-top: 20px; font-size: 1rem; }
+
+        /* --- 表單 & 登入遮罩 --- */
+        .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); z-index: 2000; display: flex; justify-content: center; align-items: center; backdrop-filter: blur(3px); }
+        .modal { background: #fff; padding: 25px; width: 85%; max-width: 350px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
+        .modal input, .modal select { width: 100%; padding: 10px; margin-bottom: 12px; border: 1px solid var(--border); border-radius: 6px; box-sizing: border-box; }
+        .modal-btn-row { display: flex; gap: 10px; margin-top: 10px; }
+        .btn-primary { background: var(--text-main); color: #fff; border: none; padding: 10px; border-radius: 6px; flex: 1; font-size: 1rem; }
+        .btn-secondary { background: #eee; color: #333; border: none; padding: 10px; border-radius: 6px; flex: 1; font-size: 1rem; }
+        
         .hidden { display: none !important; }
 
-        /* 登入遮罩樣式 */
-        #login-overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: var(--bg-color); z-index: 9999;
-            display: flex; flex-direction: column;
-            justify-content: center; align-items: center;
-            padding: 20px; box-sizing: border-box;
-        }
-        .login-box {
-            background: white; padding: 30px; border-radius: 12px;
-            width: 100%; max-width: 300px; text-align: center;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.05);
-        }
-        @media (max-width: 480px) { body { padding: 15px; } .summary-card { padding: 20px 10px; } }
     </style>
 </head>
 <body>
 
-<!-- 登入畫面 -->
-<div id="login-overlay">
-    <div class="login-box">
-        <h2 style="margin-top:0; font-weight:300; color:#333;">請輸入密碼</h2>
+<!-- 1. 登入遮罩 -->
+<div id="login-overlay" class="overlay">
+    <div class="modal">
+        <h2 style="margin-top:0;">歡迎回來</h2>
+        <p style="text-align:center; color:#888; font-size:0.9rem;">請輸入您的密碼</p>
         <input type="password" id="password-input" placeholder="Password" style="text-align:center;">
-        <button class="btn" onclick="checkLogin()">進入帳本</button>
-        <p id="login-msg" style="color:red; font-size:0.8rem; margin-top:10px;"></p>
+        <button class="btn-primary" onclick="checkLogin()" style="width:100%">進入帳本</button>
+        <p id="login-msg" style="color:red; font-size:0.8rem; text-align:center; margin-top:10px;"></p>
     </div>
 </div>
 
-<div class="container">
-    <h1>MY FREELANCE LOG</h1>
-    <div class="summary-card">
-        <div class="summary-item"><h3>預估總額 (含未收)</h3><p id="total-est">NT$ 0</p></div>
-        <div class="summary-item"><h3>實際入帳</h3><p id="total-real" style="color: var(--paid-text);">NT$ 0</p></div>
-    </div>
-    <div class="controls">
-        <div class="filter-row">
-            <select id="filter-year"><option value="all">所有年份</option></select>
-            <select id="filter-month"><option value="all">所有月份</option></select>
-        </div>
-        <select id="filter-client"><option value="all">所有客戶</option></select>
-    </div>
-    <button class="btn" onclick="openAddMode()" id="add-btn">+ 記一筆收入</button>
-    <div id="form-container" class="input-form hidden" style="margin-top: 15px;">
-        <h3 id="form-title" style="margin: 0 0 15px 0; font-size: 1rem; color: var(--text-light); text-align: center;">新增記錄</h3>
-        <label style="font-size: 0.8rem; color: var(--text-light);">日期</label>
-        <input type="date" id="in-date" required>
-        <input list="client-list" id="in-client" placeholder="客戶名稱 (選擇或輸入新客戶)">
+<!-- 2. 新增/編輯 表單 (預設隱藏) -->
+<div id="form-overlay" class="overlay hidden">
+    <div class="modal">
+        <h3 id="form-title" style="text-align:center; margin-top:0;">記一筆</h3>
+        
+        <label style="font-size:0.8rem; color:#888;">日期</label>
+        <input type="date" id="in-date">
+        
+        <input list="client-list" id="in-client" placeholder="客戶名稱">
         <datalist id="client-list"></datalist>
+
         <input type="text" id="in-project" placeholder="專案名稱">
-        <input type="number" id="in-amount" placeholder="金額 (NT$)" inputmode="numeric">
-        <label style="font-size: 0.8rem; color: var(--text-light);">收款狀態</label>
+        <input type="number" id="in-amount" placeholder="金額" inputmode="numeric">
+        
         <select id="in-status">
             <option value="未請款">未請款</option>
             <option value="已請款">已請款 (等待中)</option>
             <option value="已入帳">已入帳</option>
         </select>
-        <div style="display: flex; gap: 10px; margin-top: 10px;">
-            <button class="btn" id="submit-btn" onclick="submitData()">儲存</button>
-            <button class="btn btn-outline" onclick="closeForm()" style="margin-top:0;">取消</button>
+
+        <div class="modal-btn-row">
+            <button class="btn-primary" id="save-btn" onclick="submitData()">儲存</button>
+            <button class="btn-secondary" onclick="closeForm()">取消</button>
         </div>
     </div>
-    <div id="loader">正在同步雲端資料庫...</div>
-    <ul id="record-list" class="record-list"></ul>
-    <!-- 登出按鈕 (放在最下面) -->
-    <p style="text-align:center; margin-top:30px;">
-        <button onclick="logout()" style="background:none; border:none; color:#aaa; font-size:0.8rem; cursor:pointer;">登出 / 清除紀錄</button>
-    </p>
 </div>
+
+<!-- 3. 目標設定表單 (預設隱藏) -->
+<div id="goal-overlay" class="overlay hidden">
+    <div class="modal">
+        <h3 style="text-align:center;">設定月目標</h3>
+        <input type="number" id="goal-input" placeholder="例如: 50000" inputmode="numeric">
+        <div class="modal-btn-row">
+            <button class="btn-primary" onclick="saveGoal()">設定</button>
+            <button class="btn-secondary" onclick="document.getElementById('goal-overlay').classList.add('hidden')">取消</button>
+        </div>
+    </div>
+</div>
+
+<div class="container">
+    
+    <!-- ================= 頁面 1: 帳本 (Home) ================= -->
+    <section id="page-ledger" class="page-section active">
+        <h1>FREELANCE LOG</h1>
+        
+        <div class="controls">
+            <select id="filter-year" onchange="applyFilter()"><option value="all">所有年份</option></select>
+            <select id="filter-month" onchange="applyFilter()"><option value="all">所有月份</option></select>
+            <select id="filter-client" onchange="applyFilter()"><option value="all">所有客戶</option></select>
+        </div>
+
+        <div id="loader" style="text-align:center; padding:20px; color:#888;">正在讀取雲端資料...</div>
+        <ul id="record-list" class="record-list"></ul>
+
+        <!-- 浮動新增按鈕 -->
+        <button class="add-btn-float" onclick="openAddMode()">+</button>
+    </section>
+
+    <!-- ================= 頁面 2: 統計 (Stats) ================= -->
+    <section id="page-stats" class="page-section">
+        <h2>財務儀表板</h2>
+
+        <!-- 目標進度卡片 -->
+        <div class="card goal-section" onclick="openGoalSettings()">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-size:0.9rem; color:#888;">本月目標進度</span>
+                <span id="goal-text" style="font-size:0.8rem; color:var(--accent);">設定目標 ></span>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-top:5px;">
+                <span id="current-month-income" style="font-size:1.5rem; font-weight:bold;">$0</span>
+                <span id="goal-target" style="font-size:0.9rem; color:#888;">/ $0</span>
+            </div>
+            <div class="progress-container">
+                <div class="progress-bar" id="goal-bar"></div>
+            </div>
+            <p id="goal-percent" style="margin:0; font-size:0.8rem; text-align:right;">0%</p>
+        </div>
+
+        <!-- 數據概覽 -->
+        <div class="stat-grid">
+            <div class="stat-box">
+                <h4>總收入 (預估)</h4>
+                <p id="stat-total-est">$0</p>
+            </div>
+            <div class="stat-box">
+                <h4>實際入袋</h4>
+                <p id="stat-total-real" style="color:var(--status-paid);">$0</p>
+            </div>
+        </div>
+
+        <!-- 圖表區 -->
+        <div class="card">
+            <h4 style="margin-top:0; color:#888; font-weight:normal;">每月收入趨勢 (今年)</h4>
+            <canvas id="chart-bar"></canvas>
+        </div>
+
+        <div class="card">
+            <h4 style="margin-top:0; color:#888; font-weight:normal;">客戶貢獻佔比 (Top 5)</h4>
+            <canvas id="chart-pie" style="max-height:250px;"></canvas>
+        </div>
+    </section>
+
+    <!-- ================= 頁面 3: 設定 (Settings) ================= -->
+    <section id="page-settings" class="page-section">
+        <h2>設定</h2>
+        
+        <ul class="settings-list">
+            <li>
+                <span>目前版本</span>
+                <span style="color:#888;">v2.0 PRO</span>
+            </li>
+            <li onclick="openGoalSettings()" style="cursor:pointer;">
+                <span>修改月收入目標</span>
+                <span>></span>
+            </li>
+            <li onclick="window.open('https://docs.google.com/spreadsheets', '_blank')" style="cursor:pointer;">
+                <span>開啟 Google 試算表</span>
+                <span>></span>
+            </li>
+        </ul>
+
+        <button class="btn-logout" onclick="logout()">登出帳號</button>
+        <p style="text-align:center; margin-top:20px; color:#ccc; font-size:0.8rem;">
+            Created for Freelancers
+        </p>
+    </section>
+
+</div>
+
+<!-- 底部導航列 -->
+<nav class="bottom-nav">
+    <div class="nav-item active" onclick="switchPage('ledger', this)">
+        <svg viewBox="0 0 24 24"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/></svg>
+        <span>帳本</span>
+    </div>
+    <div class="nav-item" onclick="switchPage('stats', this)">
+        <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></svg>
+        <span>分析</span>
+    </div>
+    <div class="nav-item" onclick="switchPage('settings', this)">
+        <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+        <span>設定</span>
+    </div>
+</nav>
 
 <script>
     // ==========================================
-    // ⚠️⚠️⚠️ 請務必將你的網址貼回這裡 ⚠️⚠️⚠️
+    // ⚠️ 請在此填入你的 GAS 網址
     const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwsWP7prYO9nOLx3k25qy5OBXYXHyTeP02cOAWxdU1dlRBz_a-sEwnwUEDLws-6t0rimg/exec'; 
     // ==========================================
 
     let rawData = [];
     let currentEditId = null; 
-    let USER_TOKEN = ''; // 用來存密碼
+    let USER_TOKEN = '';
+    let monthlyGoal = localStorage.getItem('freelance_goal') || 50000; // 預設目標
+
+    // 圖表實例
+    let chartBarInstance = null;
+    let chartPieInstance = null;
 
     window.onload = function() {
-        // 檢查是否有儲存的密碼
+        // 1. 檢查密碼
         const savedPass = localStorage.getItem('freelance_app_password');
         if(savedPass) {
             USER_TOKEN = savedPass;
             document.getElementById('login-overlay').classList.add('hidden');
-            setDefaultDate();
             fetchData();
         }
+        // 2. 初始化日期
+        setDefaultDate();
+        // 3. 初始化目標顯示
+        updateGoalUI();
     };
 
-    // 登入功能
+    // --- 頁面切換邏輯 ---
+    function switchPage(pageName, navEl) {
+        // 隱藏所有頁面
+        document.querySelectorAll('.page-section').forEach(el => el.classList.remove('active'));
+        // 顯示目標頁面
+        document.getElementById('page-' + pageName).classList.add('active');
+        
+        // 更新導航按鈕狀態
+        document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+        if(navEl) navEl.classList.add('active');
+
+        // 如果切換到統計頁，重新繪製圖表
+        if(pageName === 'stats') {
+            renderCharts();
+        }
+    }
+
+    // --- 登入與資料讀取 ---
     function checkLogin() {
         const input = document.getElementById('password-input').value;
         if(!input) return;
-        
-        // 先暫存到變數，嘗試請求資料看看
         USER_TOKEN = input;
         const msg = document.getElementById('login-msg');
         msg.innerText = "驗證中...";
@@ -181,59 +350,37 @@
         .then(res => res.json())
         .then(json => {
             if(json.status === 'success') {
-                // 登入成功
                 localStorage.setItem('freelance_app_password', USER_TOKEN);
                 document.getElementById('login-overlay').classList.add('hidden');
-                rawData = json.data;
-                updateClientDatalist(json.clients);
-                populateDateFilters();
-                applyFilter();
-                document.getElementById('loader').classList.add('hidden');
+                processData(json);
             } else {
-                msg.innerText = "密碼錯誤，請重試";
+                msg.innerText = "密碼錯誤";
                 USER_TOKEN = '';
             }
         })
-        .catch(err => {
-            msg.innerText = "連線失敗，請檢查網路";
-        });
+        .catch(err => msg.innerText = "連線失敗");
     }
 
-    function logout() {
-        if(confirm("確定要登出嗎？下次需要重新輸入密碼。")) {
-            localStorage.removeItem('freelance_app_password');
-            location.reload();
-        }
-    }
-
-    // 取得資料
     function fetchData() {
         document.getElementById('loader').classList.remove('hidden');
-        document.getElementById('record-list').innerHTML = '';
-        
         fetch(GOOGLE_SCRIPT_URL + '?action=get&password=' + encodeURIComponent(USER_TOKEN))
         .then(res => res.json())
         .then(json => {
-            if(json.status === 'error') {
-                // 如果後端說密碼錯誤 (可能是後端改了密碼)
-                if(json.message.includes('密碼')) {
-                    alert('授權失效，請重新登入');
-                    logout();
-                    return;
-                }
-                alert('系統錯誤：' + json.message);
-                return;
-            }
-            rawData = json.data;
-            updateClientDatalist(json.clients);
-            populateDateFilters();
-            applyFilter();
-            document.getElementById('loader').classList.add('hidden');
+            if(json.status === 'success') processData(json);
+            else if(json.message.includes('密碼')) logout(); 
         })
         .catch(err => console.error(err));
     }
 
-    // 提交資料 (Payload 增加 password)
+    function processData(json) {
+        rawData = json.data;
+        updateClientDatalist(json.clients);
+        populateDateFilters();
+        applyFilter(); // 渲染列表
+        document.getElementById('loader').classList.add('hidden');
+    }
+
+    // --- 核心資料操作 (新增/編輯/刪除/狀態) ---
     function submitData() {
         const date = document.getElementById('in-date').value;
         const client = document.getElementById('in-client').value;
@@ -244,30 +391,30 @@
         if(!date || !client || !amount) { alert("請填寫完整資訊"); return; }
 
         const payload = { date, client, project, amount, status, password: USER_TOKEN };
-        const saveBtn = document.getElementById('submit-btn');
-        const originalText = saveBtn.innerText;
-        saveBtn.innerText = "處理中...";
-        saveBtn.disabled = true;
+        const btn = document.getElementById('save-btn');
+        const orgText = btn.innerText;
+        btn.innerText = "處理中..."; btn.disabled = true;
 
         let action = currentEditId ? 'edit' : 'add';
-        if (currentEditId) payload.id = currentEditId;
+        if(currentEditId) payload.id = currentEditId;
 
-        fetch(GOOGLE_SCRIPT_URL + '?action=' + action, {
-            method: 'POST', body: JSON.stringify(payload)
-        })
+        fetch(GOOGLE_SCRIPT_URL + '?action=' + action, { method: 'POST', body: JSON.stringify(payload) })
         .then(res => res.json())
-        .then(response => {
-            if(response.status === 'success') {
-                closeForm(); fetchData();
-            } else { alert("失敗：" + response.message); }
+        .then(res => {
+            if(res.status === 'success') {
+                closeForm();
+                fetchData();
+            } else alert(res.message);
         })
-        .finally(() => { saveBtn.innerText = originalText; saveBtn.disabled = false; });
+        .finally(() => { btn.innerText = orgText; btn.disabled = false; });
     }
 
     function updateStatus(rowIndex, newStatus) {
-        const target = rawData.find(r => r.rowIndex === rowIndex);
-        if(target) target.status = newStatus;
+        // 樂觀更新前端
+        const item = rawData.find(r => r.rowIndex === rowIndex);
+        if(item) item.status = newStatus;
         applyFilter(); 
+        // 背景更新後端
         fetch(GOOGLE_SCRIPT_URL + '?action=updateStatus', {
             method: 'POST', body: JSON.stringify({ rowIndex, newStatus, password: USER_TOKEN })
         });
@@ -275,95 +422,264 @@
 
     function deleteRecord(id) {
         if(!confirm("確定刪除？")) return;
-        const btn = document.querySelector(`#card-${id} .btn-delete`);
-        if(btn) btn.innerText = "...";
         fetch(GOOGLE_SCRIPT_URL + '?action=delete', {
-            method: 'POST', body: JSON.stringify({ id: id, password: USER_TOKEN })
-        })
-        .then(res => res.json())
-        .then(response => {
-            if(response.status === 'success') fetchData();
-            else alert("失敗");
+            method: 'POST', body: JSON.stringify({ id, password: USER_TOKEN })
+        }).then(res => res.json()).then(res => {
+            if(res.status === 'success') fetchData();
         });
     }
 
-    // --- 其他 UI 函數保持不變 ---
-    function setDefaultDate() {
-        const offset = new Date().getTimezoneOffset() * 60000;
-        document.getElementById('in-date').value = (new Date(Date.now() - offset)).toISOString().slice(0, 10);
-    }
-    function openAddMode() {
-        currentEditId = null; document.getElementById('form-title').innerText = "新增記錄";
-        const subBtn = document.getElementById('submit-btn'); subBtn.innerText = "儲存"; subBtn.classList.remove('is-editing');
-        document.getElementById('in-client').value = ''; document.getElementById('in-project').value = ''; 
-        document.getElementById('in-amount').value = ''; document.getElementById('in-status').value = '未請款';
-        setDefaultDate();
-        document.getElementById('form-container').classList.remove('hidden'); document.getElementById('add-btn').classList.add('hidden');
-    }
-    function openEditMode(id) {
-        const item = rawData.find(r => r.id.toString() === id.toString()); if(!item) return;
-        currentEditId = id; document.getElementById('form-title').innerText = "編輯記錄";
-        const subBtn = document.getElementById('submit-btn'); subBtn.innerText = "更新資料"; subBtn.classList.add('is-editing');
-        if(item.date && item.date.length >= 10) document.getElementById('in-date').value = item.date.substring(0, 10);
-        document.getElementById('in-client').value = item.client; document.getElementById('in-project').value = item.project;
-        document.getElementById('in-amount').value = item.amount; document.getElementById('in-status').value = item.status;
-        document.getElementById('form-container').classList.remove('hidden'); document.getElementById('add-btn').classList.add('hidden');
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-    function closeForm() {
-        document.getElementById('form-container').classList.add('hidden'); document.getElementById('add-btn').classList.remove('hidden'); currentEditId = null;
-    }
-    document.getElementById('filter-year').addEventListener('change', applyFilter);
-    document.getElementById('filter-month').addEventListener('change', applyFilter);
-    document.getElementById('filter-client').addEventListener('change', applyFilter);
+    // --- 介面渲染 (列表) ---
     function applyFilter() {
         const year = document.getElementById('filter-year').value;
         const month = document.getElementById('filter-month').value;
         const client = document.getElementById('filter-client').value;
+        
         const filtered = rawData.filter(item => {
             const d = new Date(item.date);
             return (year === 'all' || d.getFullYear().toString() === year) &&
                    (month === 'all' || (d.getMonth() + 1).toString() === month) &&
                    (client === 'all' || item.client === client);
         });
+        
         renderList(filtered);
     }
+
     function renderList(data) {
-        const list = document.getElementById('record-list'); list.innerHTML = '';
-        let totalEst = 0; let totalReal = 0;
-        if (data.length === 0) list.innerHTML = '<li style="text-align:center; color:#999; padding:20px;">尚無資料</li>';
+        const list = document.getElementById('record-list');
+        list.innerHTML = '';
+        if(data.length === 0) {
+            list.innerHTML = '<li style="text-align:center;color:#ccc;margin-top:20px;">無資料</li>';
+            return;
+        }
+
         data.forEach(item => {
-            const amt = parseInt(item.amount) || 0; totalEst += amt; if(item.status === '已入帳') totalReal += amt;
-            let dateStr = item.date; if(dateStr && dateStr.length >= 10) dateStr = dateStr.substring(0, 10);
-            const li = document.createElement('li'); const statusClass = item.status.split('(')[0]; 
-            li.className = `record-card status-${statusClass}`; li.id = `card-${item.id}`; 
+            const amt = parseInt(item.amount) || 0;
+            let dateStr = item.date.substring(0, 10);
+            const li = document.createElement('li');
+            const statusClass = item.status.split('(')[0];
+            
+            li.className = `record-card status-${statusClass}`;
             li.innerHTML = `
-                <div class="card-header"><span class="card-date">${dateStr}</span><span class="card-amt">$${amt.toLocaleString()}</span></div>
-                <div class="card-client">${item.client}</div><div class="card-project">${item.project}</div>
-                <div class="card-actions">
-                    <div style="display:flex; align-items:center;"><span class="status-label">狀態:</span>
-                    <select class="status-select" onchange="updateStatus(${item.rowIndex}, this.value)">
+                <div class="card-row" onclick="openEditMode('${item.id}')">
+                    <div>
+                        <div class="card-client">${item.client}</div>
+                        <div class="card-project">${item.project}</div>
+                        <span class="card-date">${dateStr}</span>
+                        <span class="status-badge">${item.status}</span>
+                    </div>
+                    <div style="text-align:right;">
+                        <div class="card-amt">$${amt.toLocaleString()}</div>
+                        <div style="margin-top:10px;">
+                            <button class="btn-mini" onclick="event.stopPropagation(); deleteRecord('${item.id}')">刪除</button>
+                        </div>
+                    </div>
+                </div>
+                <!-- 隱藏的狀態切換器 (點擊卡片編輯時才用) -->
+                <div style="margin-top:10px; border-top:1px solid #eee; padding-top:10px; display:flex; align-items:center;">
+                   <span style="font-size:0.75rem; color:#888; margin-right:5px;">快速切換:</span>
+                   <select style="padding:5px; font-size:0.8rem;" onchange="updateStatus(${item.rowIndex}, this.value)">
                         <option value="未請款" ${item.status === '未請款' ? 'selected' : ''}>未請款</option>
                         <option value="已請款" ${item.status === '已請款' ? 'selected' : ''}>已請款</option>
                         <option value="已入帳" ${item.status === '已入帳' ? 'selected' : ''}>已入帳</option>
-                    </select></div>
-                    <div class="action-group"><button class="btn-mini btn-edit" onclick="openEditMode('${item.id}')">編輯</button><button class="btn-mini btn-delete" onclick="deleteRecord('${item.id}')">刪除</button></div>
-                </div>`;
+                   </select>
+                </div>
+            `;
             list.appendChild(li);
         });
-        document.getElementById('total-est').innerText = 'NT$ ' + totalEst.toLocaleString(); document.getElementById('total-real').innerText = 'NT$ ' + totalReal.toLocaleString();
+    }
+
+    // --- 統計圖表與目標 (Charts & Goals) ---
+    function renderCharts() {
+        if(rawData.length === 0) return;
+
+        // 1. 計算數據
+        let totalEst = 0, totalReal = 0;
+        let monthlyData = {}; // { '2023-01': 3000 }
+        let clientData = {};  // { 'Google': 50000 }
+        const currentYear = new Date().getFullYear();
+
+        // 本月收入 (用於目標進度)
+        let currentMonthIncome = 0;
+        const now = new Date();
+        const thisMonthKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+
+        rawData.forEach(item => {
+            const d = new Date(item.date);
+            const amt = parseInt(item.amount) || 0;
+            const y = d.getFullYear();
+            const m = d.getMonth() + 1;
+            const key = `${y}-${String(m).padStart(2,'0')}`;
+
+            // 全體統計
+            totalEst += amt;
+            if(item.status === '已入帳') totalReal += amt;
+
+            // 只統計「今年」的圖表
+            if(y === currentYear) {
+                if(!monthlyData[m]) monthlyData[m] = 0;
+                monthlyData[m] += amt;
+            }
+
+            // 客戶統計 (不分年份，或可改為今年)
+            if(!clientData[item.client]) clientData[item.client] = 0;
+            clientData[item.client] += amt;
+
+            // 本月實際收入 (目標進度用，只算已入帳？通常目標是看營收，這裡算全部)
+            // 你可以決定要算「已入帳」還是「帳面總額」。這裡先算「帳面總額」比較有成就感
+            if(key === thisMonthKey) {
+                currentMonthIncome += amt;
+            }
+        });
+
+        // 更新文字統計
+        document.getElementById('stat-total-est').innerText = '$' + totalEst.toLocaleString();
+        document.getElementById('stat-total-real').innerText = '$' + totalReal.toLocaleString();
+
+        // 更新目標進度條
+        updateGoalProgress(currentMonthIncome);
+
+        // --- 畫長條圖 (每月) ---
+        const ctxBar = document.getElementById('chart-bar').getContext('2d');
+        if(chartBarInstance) chartBarInstance.destroy(); // 清除舊圖
+        
+        const labelsBar = [];
+        const dataBar = [];
+        for(let i=1; i<=12; i++) {
+            labelsBar.push(i + '月');
+            dataBar.push(monthlyData[i] || 0);
+        }
+
+        chartBarInstance = new Chart(ctxBar, {
+            type: 'bar',
+            data: {
+                labels: labelsBar,
+                datasets: [{
+                    label: '月收入',
+                    data: dataBar,
+                    backgroundColor: '#7986cb',
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { display: false } },
+                scales: { y: { beginAtZero: true } }
+            }
+        });
+
+        // --- 畫圓餅圖 (客戶) ---
+        const ctxPie = document.getElementById('chart-pie').getContext('2d');
+        if(chartPieInstance) chartPieInstance.destroy();
+
+        // 排序並只取前 5 名
+        const sortedClients = Object.entries(clientData).sort((a,b) => b[1] - a[1]).slice(0, 5);
+        
+        chartPieInstance = new Chart(ctxPie, {
+            type: 'doughnut',
+            data: {
+                labels: sortedClients.map(x => x[0]),
+                datasets: [{
+                    data: sortedClients.map(x => x[1]),
+                    backgroundColor: ['#34c759', '#5ac8fa', '#ffcc00', '#ff3b30', '#8e8e93']
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false
+            }
+        });
+    }
+
+    // --- 目標設定功能 ---
+    function openGoalSettings() {
+        document.getElementById('goal-input').value = monthlyGoal;
+        document.getElementById('goal-overlay').classList.remove('hidden');
+    }
+
+    function saveGoal() {
+        const val = document.getElementById('goal-input').value;
+        if(val) {
+            monthlyGoal = parseInt(val);
+            localStorage.setItem('freelance_goal', monthlyGoal);
+            updateGoalUI();
+            renderCharts(); // 重新計算進度
+            document.getElementById('goal-overlay').classList.add('hidden');
+        }
+    }
+
+    function updateGoalUI() {
+        document.getElementById('goal-target').innerText = '/ $' + parseInt(monthlyGoal).toLocaleString();
+    }
+
+    function updateGoalProgress(currentIncome) {
+        const percent = Math.min(100, Math.round((currentIncome / monthlyGoal) * 100));
+        document.getElementById('current-month-income').innerText = '$' + currentIncome.toLocaleString();
+        document.getElementById('goal-bar').style.width = percent + '%';
+        document.getElementById('goal-percent').innerText = percent + '%';
+        
+        // 顏色變化：達成目標變綠色，否則灰色
+        const bar = document.getElementById('goal-bar');
+        if(percent >= 100) bar.style.backgroundColor = '#34c759'; // Green
+        else bar.style.backgroundColor = '#7986cb'; // Blue/Purple
+    }
+
+    // --- 表單與工具函數 ---
+    function openAddMode() {
+        currentEditId = null;
+        document.getElementById('form-title').innerText = "新增記錄";
+        document.getElementById('in-client').value = '';
+        document.getElementById('in-project').value = '';
+        document.getElementById('in-amount').value = '';
+        document.getElementById('in-status').value = '未請款';
+        document.getElementById('form-overlay').classList.remove('hidden');
+    }
+    function openEditMode(id) {
+        currentEditId = id;
+        const item = rawData.find(r => r.id.toString() === id.toString());
+        if(!item) return;
+        document.getElementById('form-title').innerText = "編輯記錄";
+        document.getElementById('in-date').value = item.date.substring(0, 10);
+        document.getElementById('in-client').value = item.client;
+        document.getElementById('in-project').value = item.project;
+        document.getElementById('in-amount').value = item.amount;
+        document.getElementById('in-status').value = item.status;
+        document.getElementById('form-overlay').classList.remove('hidden');
+    }
+    function closeForm() { document.getElementById('form-overlay').classList.add('hidden'); }
+    function setDefaultDate() { 
+        const offset = new Date().getTimezoneOffset() * 60000;
+        document.getElementById('in-date').value = (new Date(Date.now() - offset)).toISOString().slice(0, 10);
+    }
+    function logout() {
+        if(confirm("確定要登出嗎？")) {
+            localStorage.removeItem('freelance_app_password');
+            location.reload();
+        }
     }
     function updateClientDatalist(clients) {
-        const dl = document.getElementById('client-list'); const select = document.getElementById('filter-client'); const currentSelectValue = select.value;
-        dl.innerHTML = ''; while (select.options.length > 1) { select.remove(1); }
-        clients.forEach(c => { if(!c) return; const op1 = document.createElement('option'); op1.value = c; dl.appendChild(op1); const op2 = document.createElement('option'); op2.value = c; op2.text = c; select.add(op2); });
-        select.value = currentSelectValue; if (select.selectedIndex === -1) select.value = 'all';
+        const dl = document.getElementById('client-list'); 
+        const select = document.getElementById('filter-client');
+        dl.innerHTML = ''; 
+        while (select.options.length > 1) select.remove(1);
+        clients.forEach(c => {
+            if(!c) return;
+            const op1 = document.createElement('option'); op1.value = c; dl.appendChild(op1);
+            const op2 = document.createElement('option'); op2.value = c; op2.text = c; select.add(op2);
+        });
     }
     function populateDateFilters() {
-        const yearSelect = document.getElementById('filter-year'); const monthSelect = document.getElementById('filter-month');
-        if(yearSelect.options.length === 1) { for(let y = new Date().getFullYear(); y >= new Date().getFullYear() - 5; y--) { let op = document.createElement('option'); op.value = y; op.innerText = y + '年'; yearSelect.appendChild(op); } }
-        if(monthSelect.options.length === 1) { for(let m = 1; m <= 12; m++) { let op = document.createElement('option'); op.value = m; op.innerText = m + '月'; monthSelect.appendChild(op); } }
+        const yearSelect = document.getElementById('filter-year'); 
+        const monthSelect = document.getElementById('filter-month');
+        if(yearSelect.options.length === 1) { 
+            const y = new Date().getFullYear();
+            for(let i=y; i>=y-5; i--) { const op=document.createElement('option'); op.value=i; op.innerText=i+'年'; yearSelect.appendChild(op); }
+        }
+        if(monthSelect.options.length === 1) {
+            for(let i=1; i<=12; i++) { const op=document.createElement('option'); op.value=i; op.innerText=i+'月'; monthSelect.appendChild(op); }
+        }
     }
+
 </script>
 </body>
 </html>
